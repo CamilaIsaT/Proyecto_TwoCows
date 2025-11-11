@@ -62,14 +62,11 @@ class Lote(models.Model):
     nombre = models.CharField(max_length=100, unique=True, verbose_name="Lote")
     descripcion = models.TextField(blank=True, verbose_name="Descripción")
     capacidad = models.IntegerField(verbose_name="Capacidad Máxima")
-    activo = models.BooleanField(default=True, verbose_name="Lote Activo")
+    estado = models.BooleanField(default=True, verbose_name="Lote Activo")
 
     def __str__(self):
         return self.nombre
 
-    class Meta:
-        verbose_name = "Lote de Vacas"
-        verbose_name_plural = "Lotes de Vacas"
 
 
 # ===============================================
@@ -92,7 +89,7 @@ class EventoSanitario(models.Model):
     
     # 1. Relación para eventos individuales (Opcional)
     vaca_afectada = models.ForeignKey(
-        'Vaca', 
+        'vacas', 
         on_delete=models.CASCADE, 
         related_name='eventos_individuales',
         verbose_name="Animal Afectado",
@@ -133,9 +130,6 @@ class EventoSanitario(models.Model):
         return f"{self.get_tipo_display()} sin asignación"
 
 
-    class Meta:
-        verbose_name = "Evento Sanitario"
-        verbose_name_plural = "Eventos Sanitarios"
 # ===============================================
 # MODELO: Evento de Desleche (Destete)
 # ===============================================
@@ -176,15 +170,12 @@ class EventoDesleche(models.Model):
     def __str__(self):
         return f"Desleche del Lote {self.lote_origen.nombre if self.lote_origen else 'N/A'} el {self.fecha_desleche}"
 
-    class Meta:
-        verbose_name = "Evento de Desleche"
-        verbose_name_plural = "Eventos de Desleche"
 
 # ===============================================
 # MODELO: Vaca
 # ===============================================
 
-class Vaca(models.Model):
+class vacas(models.Model):
     """Modelo principal para registrar una vaca individual."""
 
     # 1. Información de Identificación
@@ -192,7 +183,7 @@ class Vaca(models.Model):
     raza = models.CharField(max_length=100)
     fecha_nacimiento = models.DateField()
     
-    # 2. Relación con Lote (¡INTEGRACIÓN CLAVE!)
+    # 2. Relación con Lote 
     lote = models.ForeignKey(
         Lote, 
         on_delete=models.SET_NULL, # Mantiene la vaca aunque se borre el lote
@@ -258,6 +249,4 @@ class Vaca(models.Model):
     def __str__(self):
         return self.arete
 
-    class Meta:
-        verbose_name = "Vaca/Animal"
-        verbose_name_plural = "Vacas/Animales"
+   

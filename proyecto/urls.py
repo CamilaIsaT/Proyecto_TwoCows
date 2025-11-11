@@ -20,14 +20,16 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 
 
 urlpatterns = [
+    
     # Incluir las URLs de la aplicación twocows
     path('twocows/', include('twocows.urls')),
+    # Admin site
+    path('admin/', admin.site.urls),
     # Generador de esquema
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     # Swagger UI
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     # Redoc UI
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
-    # Admin site
-    path('admin/', admin.site.urls),
+    
 ]
