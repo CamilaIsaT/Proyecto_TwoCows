@@ -50,7 +50,7 @@ from django.forms import ValidationError
             return 'vieja'
 
 
-    def __str__(self):
+    def _str_(self):
         return self.arete
 
 """
@@ -64,7 +64,7 @@ class Lote(models.Model):
     capacidad = models.IntegerField(verbose_name="Capacidad Máxima")
     estado = models.BooleanField(default=True, verbose_name="Lote Activo")
 
-    def __str__(self):
+    def _str_(self):
         return self.nombre
 
 
@@ -122,7 +122,7 @@ class EventoSanitario(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
-    def __str__(self):
+    def _str_(self):
         if self.vaca_afectada:
             return f"{self.get_tipo_display()} a Vaca {self.vaca_afectada.arete} el {self.fecha}"
         elif self.lote_afectado:
@@ -167,7 +167,7 @@ class EventoDesleche(models.Model):
     )
     observaciones = models.TextField(blank=True)
 
-    def __str__(self):
+    def _str_(self):
         return f"Desleche del Lote {self.lote_origen.nombre if self.lote_origen else 'N/A'} el {self.fecha_desleche}"
 
 
@@ -246,7 +246,5 @@ class vacas(models.Model):
             return 'Vieja'
 
 
-    def __str__(self):
+    def _str_(self):
         return self.arete
-
-   
