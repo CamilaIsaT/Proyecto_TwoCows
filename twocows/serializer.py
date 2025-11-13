@@ -12,7 +12,7 @@ class vacaSerializer(serializers.ModelSerializer):
 # Meta indica qué modelo se está serializando y qué campos incluir
     class Meta:
         model = vacas
-        fields = '_all_'
+        fields = '__all__'
 # Agregar método para calcular edad en meses
     def get_edad_meses(self, obj):
         """Devuelve la edad de la vaca en meses."""
@@ -24,7 +24,7 @@ class vacaSerializer(serializers.ModelSerializer):
 class LoteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lote
-        fields = '_all_'
+        fields = '__all__'
 
 # Crear un serializador para el modelo Evento
 class EventoSanitarioSerializer(serializers.ModelSerializer):
@@ -37,7 +37,7 @@ class EventoSanitarioSerializer(serializers.ModelSerializer):
     )
     class Meta:
         model = EventoSanitario
-        fields = '_all_'
+        fields = '__all__'
 
 # Crear un serializador para el modelo EventoDesleche
 class EventoDeslecheSerializer(serializers.ModelSerializer):
@@ -51,11 +51,11 @@ class EventoDeslecheSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EventoDesleche
-        fields = '_all_'
+        fields = '__all__'
 
 class VacaDetalleSerializer(serializers.ModelSerializer):
     eventos_individuales = EventoSanitarioSerializer(many=True, read_only=True)
 
     class Meta:
         model = vacas
-        fields = '_all_'
+        fields = '__all__'

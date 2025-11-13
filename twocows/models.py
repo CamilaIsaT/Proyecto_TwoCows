@@ -1,59 +1,10 @@
 from django.db import models
+from django.core.validators import RegexValidator
 from datetime import date
 from django.forms import ValidationError
 
 
 # Create your models here.
-# Definir el modelo vacas con sus campos y métodos
-
-"""    class vacas(models.Model):    
-    arete = models.CharField(max_length=50)
-    raza = models.CharField(max_length=100)
-    etapas_vida_choices=[
-        ('ternero', 'ternero'),
-        ('novillo', 'novillo'),
-        ('joven', 'joven'),
-        ('adulta', 'adulta'),
-        ('vieja', 'vieja'),
-    ]
-    etapa = models.CharField(max_length=50, choices=etapas_vida_choices)
-    lote = models.CharField(max_length=100)
-    fecha_nacimiento = models.DateField()    
-    sexo_choices=[
-        ('Macho', 'Macho'),
-        ('Hembra', 'Hembra'),
-    ]
-    sexo = models.CharField(max_length=6, choices=sexo_choices)
-    madre = models.CharField(max_length=100)
-    padre = models.CharField(max_length=100)
-
-
-    def edad_meses(self):
-        # Calcula la edad en meses a partir de la fecha de nacimiento
-        hoy = date.today()
-        return (hoy.year - self.fecha_nacimiento.year) * 12 + hoy.month - self.fecha_nacimiento.month
-
-
-    @property
-    def etapa_vida(self):
-        # Determina la etapa de vida basada en la edad en meses
-        meses = self.edad_meses()
-        if meses < 6:
-            return 'ternero'
-        elif meses < 18:
-            return 'novillo'
-        elif meses < 36:
-            return 'joven'
-        elif meses < 96:
-            return 'adulta'
-        else:
-            return 'vieja'
-
-
-    def _str_(self):
-        return self.arete
-
-"""
 # ===============================================
 # MODELO: Lote de Vacas
 # ===============================================
@@ -66,7 +17,6 @@ class Lote(models.Model):
 
     def _str_(self):
         return self.nombre
-
 
 
 # ===============================================
@@ -122,7 +72,7 @@ class EventoSanitario(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
-    def _str_(self):
+    def __str__(self):
         if self.vaca_afectada:
             return f"{self.get_tipo_display()} a Vaca {self.vaca_afectada.arete} el {self.fecha}"
         elif self.lote_afectado:
@@ -167,7 +117,7 @@ class EventoDesleche(models.Model):
     )
     observaciones = models.TextField(blank=True)
 
-    def _str_(self):
+    def __str__(self):
         return f"Desleche del Lote {self.lote_origen.nombre if self.lote_origen else 'N/A'} el {self.fecha_desleche}"
 
 
@@ -175,21 +125,51 @@ class EventoDesleche(models.Model):
 # MODELO: Vaca
 # ===============================================
 
+class Raza(models.Model):
+    nombre = models.CharField(max_length=100, unique=True, verbose_name="Nombre de la Raza")
+    
+    class Meta:
+        verbose_name = "Raza"
+        verbose_name_plural = "Razas"
+
+    def __str__(self):
+        return self.nombre
+
 class vacas(models.Model):
     """Modelo principal para registrar una vaca individual."""
 
     # 1. Información de Identificación
-    arete = models.CharField(max_length=50, unique=True, verbose_name="Número de Arete")
-    raza = models.CharField(max_length=100)
+    #verbose_name para etiquetas más amigables en formularios y admin
+# Esta regla (expresión regular) exige que el valor contenga
+    # únicamente dígitos (0-9) desde el inicio (^) hasta el final ($).
+    validador_solo_numeros = RegexValidator(
+        r'^\d+$', 
+        'El número de arete solo debe contener números.'
+    )
+
+    # 1. Información de Identificación
+    arete = models.CharField(
+        max_length=50, 
+        unique=True, 
+        verbose_name="Número de Arete",
+        validators=[validador_solo_numeros]  # 3. ¡Aplica el validador aquí!
+    )
+    raza = models.ForeignKey(
+        Raza, 
+        on_delete=models.SET_NULL, # Si borras la raza, no borres la vaca
+        null=True,                 # Permite que la vaca no tenga raza asignada
+        verbose_name="Raza"
+    )
     fecha_nacimiento = models.DateField()
     
     # 2. Relación con Lote 
+    # Una vaca puede pertenecer a un lote (opcional)
     lote = models.ForeignKey(
         Lote, 
         on_delete=models.SET_NULL, # Mantiene la vaca aunque se borre el lote
         null=True, 
         blank=True,
-        related_name='animales_en_lote',
+        related_name='animales_en_lote', #permite acceder a las vacas desde el lote
         verbose_name="Lote Actual"
     )
     
@@ -206,6 +186,7 @@ class vacas(models.Model):
         on_delete=models.SET_NULL, 
         null=True, 
         blank=True,
+
         related_name='hijos',
         verbose_name="Arete de la Madre"
     )
@@ -246,5 +227,5 @@ class vacas(models.Model):
             return 'Vieja'
 
 
-    def _str_(self):
+    def __str__(self):
         return self.arete
