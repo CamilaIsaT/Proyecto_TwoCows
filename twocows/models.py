@@ -1,10 +1,13 @@
-from django.db import models
+from django.db import models, transaction
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import RegexValidator
 from datetime import date
 from django.forms import ValidationError
-
-
+from django.conf import settings
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from rest_framework.authtoken.models import Token
+from django.utils.text import slugify
 #Create your models here.
 
 class Usuario(AbstractUser): #AbstracUser extiende el modelo de usuario predeterminado de Django
@@ -19,6 +22,21 @@ class Usuario(AbstractUser): #AbstracUser extiende el modelo de usuario predeter
           choices=roles, 
           default='CUIDADOR', # Valor por defecto
           verbose_name="Rol del Usuario")
+     tempo_password = models.BooleanField(default=True, verbose_name="Debe de cambiarse la contraseña")
+     
+     def save(self, *args, **kwargs):
+          if not self.username and self.first_name and self.last_name:
+            rol_clean = slugify(self.rol).replace('-', '')
+            nombre_clean =slugify(self.first_name)
+            apellido_clean = slugify(self.last_name)
+
+            base_user = f"{rol_clean}_{nombre_clean}{apellido_clean}"
+            self.username = base_user
+            contador = 1
+            while Usuario.objects.filter(username=self.username).exists():
+                self.username = f"{base_user}{contador}"
+                contador += 1
+          super().save(*args, **kwargs)
      class Meta:
           verbose_name = "Usuario"
           verbose_name_plural = "Usuarios"
@@ -130,6 +148,22 @@ class Vaca(models.Model):
         ('PERDIDO', 'Perdido/Robado'),
     ]
      estado = models.CharField(max_length=20, choices=estado_vaca, default='ACTIVO')
+
+     def clean(self):
+            if self.madre and self.madre.sexo != 'Hembra':
+                raise ValidationError('La madre debe ser una vaca hembra.')
+            if self.padre and self.padre.sexo != 'Macho':
+                raise ValidationError('El padre debe ser un toro macho.')
+            if self.madre == self or self.padre == self:
+                raise ValidationError('Una vaca no puede ser su propia madre o padre.') 
+            if self.fecha_nacimiento > date.today():
+                raise ValidationError('La fecha de nacimiento no puede ser en el futuro.')  
+            
+     def save(self, *args, **kwargs):
+            self.full_clean() # Fuerza la validación antes de guardar
+            super().save(*args, **kwargs)
+     def __str__(self):
+            return f"Arete {self.arete} ({self.sexo})"
      @property 
      def edad_meses(self):
         hoy = date.today()
@@ -149,10 +183,7 @@ class Vaca(models.Model):
      class Meta:
         verbose_name = "Vaca/Animal"
         verbose_name_plural = "Inventario de Animales"
-
-     def __str__(self):
-        return f"Arete {self.arete} ({self.sexo})"
-     
+             
 class RegistroPeso(models.Model):
     vaca = models.ForeignKey(
          Vaca, 
@@ -182,20 +213,6 @@ class EventoSanitario(models.Model):
      ]
     tipo = models.CharField(max_length=50, choices=tipo_evento, verbose_name="Tipo de Evento")
     fecha = models.DateField(verbose_name="Fecha del Evento")
-    producto_usado = models.ForeignKey(
-         Recursos,
-         on_delete=models.PROTECT,
-         null=True,
-         verbose_name="Medicina Usada"
-         )
-    dosis = models.IntegerField(
-        max_length=8, 
-        decimal_places=2,
-        help_text="Cantidad de dosis aplicada",#help_text para guiar al usuario de qué ingresar
-        blank=True, 
-        null=True,
-        verbose_name="Dosis Aplicada"
-        )
     peso_animal= models.DecimalField(max_digits=6,decimal_places=2,blank=True, null=True, verbose_name="Peso del Animal (kg)")
     observaciones = models.TextField(blank=True)
     vaca_afectada = models.ForeignKey(
@@ -231,14 +248,43 @@ class EventoSanitario(models.Model):
                 fecha_registro=self.fecha,
                 peso=self.peso_animal,
                 observaciones=f"Registro durante evento sanitario: {self.get_tipo_display()}")
+    
     def __str__(self):
         destino = f"Vaca {self.vaca_afectada.arete}" if self.vaca_afectada else f"Lote {self.lote_afectado.nombre}"
         return f"{self.get_tipo_display()} - {destino} - {self.fecha}"
 
+
+class DetalleEventoSanitario(models.Model):
+    evento = models.ForeignKey(
+         EventoSanitario,
+         on_delete=models.CASCADE,
+         related_name='insumos_usados',
+         verbose_name="Evento Sanitario"
+         )
+    recurso = models.ForeignKey(
+         Recursos,
+         on_delete=models.PROTECT,
+         null=True,
+         verbose_name="Recurso Usado"
+         )
+    cantidad_usada = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Cantidad/Dosis Usada")
+
+    def save(self, *args, **kwargs):
+        with transaction.atomic():
+            if self.pk is None:
+                if self.recurso.cantidad_disponible < self.cantidad_usada:
+                    raise ValidationError(f"No hay suficiente {self.recurso.nombre} disponible.")
+                self.recurso.cantidad_disponible -= self.cantidad_usada
+                self.recurso.save()
+            super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.recurso.nombre}-{self.cantidad}"
 class EventoDesleche(models.Model):
     lote_origen = models.ForeignKey(
          Lote,
          on_delete=models.SET_NULL,
+         related_name='eventos_desleche_origen',
          null=True,
          blank=True,
          verbose_name="Lote de Origen"
@@ -246,6 +292,7 @@ class EventoDesleche(models.Model):
     lote_destino = models.ForeignKey(
         Lote,
          on_delete=models.SET_NULL,
+         related_name='eventos_desleche_destino',
          null=True,
          blank=True,
          verbose_name="Lote de Destino"
@@ -262,3 +309,48 @@ class EventoDesleche(models.Model):
     observaciones=models.TextField(blank=True)
     def __str__(self):
         return f"Desleche del Lote {self.lote_origen.nombre if self.lote_origen else 'N/A'} el {self.fecha_desleche}"
+
+class ProduccionLeche(models.Model):
+    vaca = models.ForeignKey(
+         Vaca,
+         on_delete=models.CASCADE,
+         related_name='produccion_leche',
+         verbose_name="Vaca Ordeñada", 
+         )
+    fecha = models.DateField(default=date.today, verbose_name="Fecha de Ordeño")
+    cantidad_leche = models.DecimalField(max_digits=5, decimal_places=2, verbose_name="Cantidad de Leche (litros)")
+    observaciones = models.TextField(blank=True, verbose_name="Observaciones")
+    jornada_choices = [
+        ('MAÑANA', 'Mañana'),
+        ('TARDE', 'Tarde')
+    ]
+    jornada = models.CharField(max_length=10, choices=jornada_choices, verbose_name="Jornada de Ordeño")
+    
+    ordeñador = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        limit_choices_to={'rol': 'ORDENADOR'} # Solo puede el Ordeñador
+    )
+    class Meta:
+        verbose_name = "Registro de Leche"
+        verbose_name_plural = "Producción de Leche"
+        ordering = ['-fecha', 'vaca']#ordena por fecha descendente y luego por vaca
+
+    def clean(self):
+        if self.vaca.sexo == 'Macho':
+            raise ValidationError('No se puede registrar producción de leche para vacas macho.')
+        if self.vaca.edad_meses < 18:
+            raise ValidationError('Esta vaca es muy joven para producir leche.')
+    def save(self, *args, **kwargs):
+        self.full_clean() # Fuerza la validación antes de guardar
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"{self.vaca.arete} - {self.fecha} ({self.jornada}): {self.litros}L"
+    
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
+def create_auth_token(sender, instance, created, **kwargs):
+    if created:
+        Token.objects.create(user=instance)

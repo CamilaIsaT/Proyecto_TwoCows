@@ -1,15 +1,23 @@
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework import routers
-from twocows import views
+from rest_framework.authtoken.views import obtain_auth_token
+from . import views
 
-# Configurar el enrutador para las vistas de la API
 router = routers.DefaultRouter()
-# Registrar la vista vacasView con el enrutador
-router.register(r'vacas', views.vacasView, 'vacas')
-router.register(r'lotes', views.LoteView, 'lotes')
-router.register(r'eventos_sanitarios', views.EventoSanitarioView, 'eventos_sanitarios')
-router.register(r'eventos_desleche', views.EventoDeslecheView, 'eventos_desleche')
-# Definir las rutas de la API
-urlpatterns=[
-    path('api/v1/', include(router.urls)),
+router.register(r'vacas', views.VacaViewSet, basename='vacas')
+router.register(r'usuarios', views.UsuarioViewSet, basename='usuarios')
+router.register(r'recursos', views.RecursosViewSet)
+router.register(r'razas', views.RazaViewSet)
+router.register(r'tipos-pasto', views.TipoPastoViewSet)
+router.register(r'lotes', views.LoteViewSet)
+router.register(r'registros-peso', views.RegistroPesoViewSet)
+router.register(r'eventos-sanitarios', views.EventoSanitarioViewSet)
+router.register(r'desleches', views.EventoDeslecheViewSet)
+
+
+urlpatterns = [
+    # para hacer Login (Obtener Token)
+    path('login/', obtain_auth_token, name='login'),
+# Incluir las rutas del router
+    path('', include(router.urls)),
 ]
